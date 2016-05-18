@@ -101,8 +101,7 @@
       },
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "[concat('Microsoft.Network/publicIPAddresses/', concat(parameters('resourcePrefix'),copyindex(),'PublicIP'))]",
-        "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(parameters('resourcePrefix'),copyindex(),'PublicIP'))]"        
       ],
       "properties": {
         "ipConfigurations": [
