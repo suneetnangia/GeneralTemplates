@@ -1,4 +1,4 @@
-# GeneralTemplates
+# General Templates
 General ARM Templates
 
 Deploy VMs in an existing vNet with public IPs.
