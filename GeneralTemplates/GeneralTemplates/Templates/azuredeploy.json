@@ -1,0 +1,182 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "resourcePrefix": {
+      "type": "string",
+      "defaultValue": "VM",
+      "metadata": {
+        "description": "A unique prefix for the azure VMs."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "defaultValue": "FrontEndvNet",
+      "metadata": {
+        "description": "Virtual network name where the VMS are deployed."
+      }
+    },
+    "SubnetName": {
+      "type": "string",
+      "defaultValue": "FrontEndvNet",
+      "metadata": {
+        "description": "Virtual network subnet name where the VMS are deployed."
+      }
+    },
+    "numberOfInstances": {
+      "type": "int",
+      "defaultValue": 2,
+      "metadata": {
+        "description": "Number of VMs needed to load balance the traffic to Sitecore CD CM role."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_A4",
+      "metadata": {
+        "description": "Size of the VMs."
+      }
+    },
+    "vmAdminUsername": {
+      "type": "string",
+      "defaultValue": "vmadmin",
+      "metadata": {
+        "description": "VM local admin username."
+      }
+    },
+    "vmAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "VM local admin password."
+      }
+    }
+  },
+  "variables": {
+    "VnetId": "[resourceId(resourceGroup().name, 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+    "imagePublisher": "MicrosoftWindowsServer",
+    "imageOffer": "WindowsServer",
+    "imageSKU": "2012-R2-Datacenter",
+    "subnetRef": "[concat(variables('vnetId'),'/subnets/',parameters('subnetName'))]",
+    "storageAccountName": "[toLower(concat('CD',uniqueString(resourceGroup().id)))]",
+    "publicIPAddressType": "Dynamic",
+    "storageAccountType": "Standard_LRS"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2015-06-15",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "accountType": "[variables('storageAccountType')]"
+      }
+    },
+    {
+      "type": "Microsoft.Compute/availabilitySets",
+      "apiVersion": "2015-06-15",
+      "name": "[concat(parameters('resourcePrefix'),'AvailabilitySet')]",
+      "location": "[resourceGroup().location]",
+      "properties": { }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2015-06-15",
+      "name": "[concat(parameters('resourcePrefix'),copyindex(),'PublicIP')]",
+      "copy": {
+        "name": "nicLoop",
+        "count": "[parameters('numberOfInstances')]"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2015-06-15",
+      "name": "[concat(parameters('resourcePrefix'),copyindex(),'NIC')]",
+      "copy": {
+        "name": "nicLoop",
+        "count": "[parameters('numberOfInstances')]"
+      },
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', concat(parameters('resourcePrefix'),copyindex(),'PublicIP'))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('resourcePrefix'),copyindex(),'PublicIP'))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(parameters('resourcePrefix'),copyindex())]",
+      "location": "[resourceGroup().location]",
+      "copy": {
+        "name": "nicLoop",
+        "count": "[parameters('numberOfInstances')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', concat(parameters('resourcePrefix'),copyindex(),'NIC'))]",
+        "[concat('Microsoft.Compute/availabilitySets/', concat(parameters('resourcePrefix'),'AvailabilitySet'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "availabilitySet": {
+          "id": "[resourceId('Microsoft.Compute/availabilitySets',concat(parameters('resourcePrefix'),'AvailabilitySet'))]"
+        },
+        "osProfile": {
+          "computerName": "[concat(parameters('resourcePrefix'),copyindex())]",
+          "adminUsername": "[parameters('vmAdminUsername')]",
+          "adminPassword": "[parameters('vmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('imagePublisher')]",
+            "offer": "[variables('imageOffer')]",
+            "sku": "[variables('imageSKU')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "osdisk",
+            "vhd": {
+              "uri": "[concat('http://',variables('storageAccountName'),'.blob.core.windows.net/vhds/', concat(parameters('resourcePrefix'),copyindex(),'OS.vhd'))]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('resourcePrefix'),copyindex(),'NIC'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": "true",
+            "storageUri": "[concat('http://',variables('storageAccountName'),'.blob.core.windows.net')]"
+          }
+        }
+      }
+    }
+  ]
+}
