@@ -57,7 +57,7 @@
     "imageOffer": "WindowsServer",
     "imageSKU": "2012-R2-Datacenter",
     "subnetRef": "[concat(variables('vnetId'),'/subnets/',parameters('subnetName'))]",
-    "storageAccountName": "[toLower(concat('CD',uniqueString(resourceGroup().id)))]",
+    "storageAccountName": "[toLower(concat(parameters('resourcePrefix'),uniqueString(resourceGroup().id)))]",
     "publicIPAddressType": "Dynamic",
     "storageAccountType": "Standard_LRS"
   },
